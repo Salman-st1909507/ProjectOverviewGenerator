@@ -1,0 +1,119 @@
+{
+  "projectStructure": {
+    "description": "Global project-level settings for workspace scanning",
+    "excludedPaths": ["*/bin", "*/obj", ".git", "node_modules"],
+    "excludedExtensions": [".meta", ".uid"]
+  },
+  "apiEndpoints": {
+    "description": "Configuration for API endpoint detection and extraction",
+    "paths": ["*/Controllers", "*/Handlers", "*/Api", "*/Endpoints"],
+    "patterns": ["Controller", "Handler", "Api", "Endpoint"],
+    "excludedPatterns": [],
+    "excludedPaths": [],
+    "extensions": ["*.cs", "*.ts"]
+  },
+  "categories": [
+    {
+      "name": "models",
+      "description": "Data models, entities, and DTOs",
+      "paths": ["*/Models", "*/Entities", "*/Domain/Models"],
+      "patterns": ["Model", "Entity", "ViewModel", "Dto"],
+      "excludedPatterns": ["Program", "Startup", "Config"],
+      "excludedPaths": [],
+      "extensions": ["*.cs"]
+    },
+    {
+      "name": "repositories",
+      "description": "Repository and data access patterns",
+      "paths": ["*/Repositories", "*/DataAccess", "*/Persistence"],
+      "patterns": ["Repository", "Repo"],
+      "excludedPatterns": [],
+      "excludedPaths": [],
+      "extensions": ["*.cs"]
+    },
+    {
+      "name": "services",
+      "description": "Business logic and service classes",
+      "paths": ["*/Services", "*/Application/Services"],
+      "patterns": ["Service"],
+      "excludedPatterns": ["ServiceProvider", "ServiceCollection"],
+      "excludedPaths": [],
+      "extensions": ["*.cs"]
+    },
+    {
+      "name": "controllers",
+      "description": "API controllers and handlers",
+      "paths": ["*/Controllers", "*/Handlers"],
+      "patterns": ["Controller", "Handler"],
+      "excludedPatterns": [],
+      "excludedPaths": [],
+      "extensions": ["*.cs"]
+    },
+    {
+      "name": "api",
+      "description": "API endpoints and routes (extracted and documented)",
+      "paths": ["*/Api", "*/Endpoints"],
+      "patterns": ["Api", "Endpoint"],
+      "excludedPatterns": [],
+      "excludedPaths": [],
+      "extensions": ["*.cs", "*.ts"]
+    },
+    {
+      "name": "frontend",
+      "description": "Frontend components and views",
+      "paths": ["*/Components", "*/Views", "*/Pages", "*/UI"],
+      "patterns": ["Component", "View", "Page"],
+      "excludedPatterns": [],
+      "excludedPaths": [],
+      "extensions": ["*.ts"]
+    },
+    {
+      "name": "utilities",
+      "description": "Helper classes and utilities",
+      "paths": ["*/Utils", "*/Utilities", "*/Helpers", "*/Common"],
+      "patterns": ["Helper", "Util", "Utility"],
+      "excludedPatterns": [],
+      "excludedPaths": [],
+      "extensions": ["*.cs", "*.ts"]
+    }
+  ],
+  "generatedFiles": [
+    {
+      "name": "Domain.md",
+      "description": "Domain models and data access patterns",
+      "includedCategories": ["models", "repositories"]
+    },
+    {
+      "name": "Services.md",
+      "description": "Business logic and utility services",
+      "includedCategories": ["services", "utilities"]
+    },
+    {
+      "name": "Controllers.md",
+      "description": "Controllers and API handlers",
+      "includedCategories": ["controllers"]
+    },
+    {
+      "name": "Frontend.md",
+      "description": "Frontend components and views",
+      "includedCategories": ["frontend"]
+    },
+    {
+      "name": "ProjectArchitecture.md",
+      "description": "Complete project architecture overview with all categories",
+      "includedCategories": [
+        "models",
+        "repositories",
+        "services",
+        "controllers",
+        "api",
+        "frontend",
+        "utilities"
+      ]
+    }
+  ],
+  "markdown": {
+    "headerLevel": 2,
+    "codeBlockStyle": "fenced"
+  }
+}

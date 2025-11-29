@@ -1,0 +1,14 @@
+C:\src\DotNetProjects\project-overview-generator\bin\Release\net9.0\ProjectOverviewGenerator.exe
+C:\src\DotNetProjects\project-overview-generator\bin\Release\net9.0\ProjectOverviewGenerator.deps.json
+C:\src\DotNetProjects\project-overview-generator\bin\Release\net9.0\ProjectOverviewGenerator.runtimeconfig.json
+C:\src\DotNetProjects\project-overview-generator\bin\Release\net9.0\ProjectOverviewGenerator.dll
+C:\src\DotNetProjects\project-overview-generator\bin\Release\net9.0\ProjectOverviewGenerator.pdb
+C:\src\DotNetProjects\project-overview-generator\obj\Release\net9.0\ProjectOverviewGenerator.GeneratedMSBuildEditorConfig.editorconfig
+C:\src\DotNetProjects\project-overview-generator\obj\Release\net9.0\ProjectOverviewGenerator.AssemblyInfoInputs.cache
+C:\src\DotNetProjects\project-overview-generator\obj\Release\net9.0\ProjectOverviewGenerator.AssemblyInfo.cs
+C:\src\DotNetProjects\project-overview-generator\obj\Release\net9.0\ProjectOverviewGenerator.csproj.CoreCompileInputs.cache
+C:\src\DotNetProjects\project-overview-generator\obj\Release\net9.0\ProjectOverviewGenerator.dll
+C:\src\DotNetProjects\project-overview-generator\obj\Release\net9.0\refint\ProjectOverviewGenerator.dll
+C:\src\DotNetProjects\project-overview-generator\obj\Release\net9.0\ProjectOverviewGenerator.pdb
+C:\src\DotNetProjects\project-overview-generator\obj\Release\net9.0\ProjectOverviewGenerator.genruntimeconfig.cache
+C:\src\DotNetProjects\project-overview-generator\obj\Release\net9.0\ref\ProjectOverviewGenerator.dll

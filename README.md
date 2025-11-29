@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Project Overview Generator
 
 A sophisticated .NET 8.0 console application that scans a codebase and generates category-based markdown documentation of your project architecture. It intelligently extracts types, methods, properties, API endpoints, and more from C# and TypeScript source files.
@@ -326,3 +327,7 @@ TBD
 ## Contact
 
 For issues, questions, or contributions, please open an issue or submit a pull request.
+=======
+# ProjectOverviewGenerator
+Project Overview Generator
+>>>>>>> d01c9da91b9fee9dd9bec3c38eb51cef81c5d8a0

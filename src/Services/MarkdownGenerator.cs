@@ -64,17 +64,10 @@ namespace ProjectOverviewGenerator.Services
 
             var md = $"{new string('#', h2)} API Endpoints\n\n";
 
-            // Filter endpoints by apiEndpointsConfig if provided
-            var allApiEndpoints = allFiles.SelectMany(f => f.ApiEndpoints ?? new List<ApiEndpointMetadata>()).ToList();
-
-            if (apiEndpointsConfig != null && (apiEndpointsConfig.Paths.Count > 0 || apiEndpointsConfig.Extensions.Count > 0))
-            {
-                // Filter endpoints from files matching apiEndpointsConfig
-                var matchingFiles = allFiles
-                    .Where(f => MatchesApiEndpointConfig(f, apiEndpointsConfig))
-                    .ToList();
-                allApiEndpoints = matchingFiles.SelectMany(f => f.ApiEndpoints ?? new List<ApiEndpointMetadata>()).ToList();
-            }
+            // Collect ALL endpoints from all files (no filtering - let the parser decide what's an endpoint)
+            var allApiEndpoints = allFiles
+                .SelectMany(f => f.ApiEndpoints ?? new List<ApiEndpointMetadata>())
+                .ToList();
 
             // API endpoints table
             md += "| Route | HTTP Method | Controller | Handler | Request DTO | Response DTO |\n";
@@ -86,11 +79,55 @@ namespace ProjectOverviewGenerator.Services
             }
             else
             {
-                foreach (var endpoint in allApiEndpoints.OrderBy(e => e.Route))
+                foreach (var endpoint in allApiEndpoints.OrderBy(e => e.Controller).ThenBy(e => e.Route))
                 {
-                    var requestDto = endpoint.Dtos?.FirstOrDefault(d => d.Contains("Request")) ?? "";
-                    var responseDto = endpoint.Dtos?.FirstOrDefault(d => !d.Contains("Request")) ?? "";
+                    // Separate request and response DTOs
+                    // Request DTOs are typically Commands, Queries, or marked with Request suffix
+                    // Response DTOs are typically marked with Response, Result, or ViewModel suffix
+                    var requestDto = "";
+                    var responseDto = "";
+                    
+                    if (endpoint.Dtos != null && endpoint.Dtos.Count > 0)
+                    {
+                        // First DTO in list is usually the request (from method parameter)
+                        requestDto = endpoint.Dtos.FirstOrDefault() ?? "";
+                        
+                        // If there are more DTOs, second one might be response
+                        if (endpoint.Dtos.Count > 1)
+                        {
+                            responseDto = endpoint.Dtos.Skip(1).FirstOrDefault() ?? "";
+                        }
+                    }
+                    
                     md += $"| `{endpoint.Route}` | {endpoint.HttpMethod} | {endpoint.Controller} | {endpoint.Handler} | {requestDto} | {responseDto} |\n";
+                }
+            }
+
+            // Detailed endpoint signatures
+            if (allApiEndpoints.Count > 0)
+            {
+                md += $"\n{new string('#', h2 + 1)} Endpoint Details\n\n";
+                
+                foreach (var endpoint in allApiEndpoints.OrderBy(e => e.Controller).ThenBy(e => e.Route))
+                {
+                    md += $"**{endpoint.HttpMethod} `{endpoint.Route}`** - `{endpoint.Controller}.{endpoint.Handler}`\n\n";
+                    
+                    if (endpoint.Attributes != null && endpoint.Attributes.Count > 0)
+                    {
+                        md += "```csharp\n";
+                        foreach (var attr in endpoint.Attributes)
+                        {
+                            md += attr + "\n";
+                        }
+                        md += endpoint.MethodSignature + "\n";
+                        md += "```\n\n";
+                    }
+                    else if (!string.IsNullOrEmpty(endpoint.MethodSignature))
+                    {
+                        md += "```csharp\n";
+                        md += endpoint.MethodSignature + "\n";
+                        md += "```\n\n";
+                    }
                 }
             }
 
@@ -120,6 +157,33 @@ namespace ProjectOverviewGenerator.Services
                 .OrderBy(g => g.Key)
                 .ToList();
 
+            // Generate Table of Contents
+            if (typesByCategory.Any())
+            {
+                md += $"{new string('#', h2)} Table of Contents\n\n";
+                
+                foreach (var categoryGroup in typesByCategory)
+                {
+                    var categoryName = categoryGroup.Key;
+                    var typeCount = categoryGroup.Count();
+                    var fileCount = categoryGroup.GroupBy(x => categoryFiles.First(f => f.Types.Contains(x.Type)).FilePath).Count();
+                    
+                    // Category link: use lowercase and keep hyphens to match markdown anchor format
+                    var categoryAnchor = categoryName.ToLower();
+                    md += $"- **[{categoryName}](#{categoryAnchor})** ({typeCount} classes in {fileCount} files)\n";
+                    
+                    // List all classes in this category with anchor links
+                    var classNames = categoryGroup.Select(x => x.Type.Name).Distinct().OrderBy(n => n).ToList();
+                    foreach (var className in classNames)
+                    {
+                        // Class anchor: categoryname-classname (lowercase)
+                        var classAnchor = $"{categoryName.ToLower()}-{className.ToLower()}";
+                        md += $"  - [{className}](#{classAnchor})\n";
+                    }
+                }
+                md += "\n---\n\n";
+            }
+
             // For each category, output types
             foreach (var categoryGroup in typesByCategory)
             {
@@ -138,6 +202,9 @@ namespace ProjectOverviewGenerator.Services
                     foreach (var item in fileGroup)
                     {
                         var type = item.Type;
+                        // Add anchor ID for this type: categoryname-typename (lowercase)
+                        var typeAnchor = $"{categoryGroup.Key.ToLower()}-{type.Name.ToLower()}";
+                        md += $"<a id=\"{typeAnchor}\"></a>\n\n";
                         md += $"- **{type.Name}** ({type.Kind})\n";
 
                         if (!string.IsNullOrEmpty(type.NamespaceOrModule))
@@ -149,20 +216,99 @@ namespace ProjectOverviewGenerator.Services
                         if (type.ImplementedInterfaces != null && type.ImplementedInterfaces.Count > 0)
                             md += $"  - Implements: {string.Join(", ", type.ImplementedInterfaces.Select(i => $"`{i}`"))}\n";
 
-                        if (type.Members != null && type.Members.Count > 0)
+                        // For enums, show values instead of members
+                        if (type.Kind == "enum" && type.EnumValues != null && type.EnumValues.Count > 0)
                         {
-                            md += "  - Members:\n";
-                            foreach (var member in type.Members.OrderBy(m => m.Name))
+                            md += $"  - **Values:** {string.Join(", ", type.EnumValues.Select(v => $"`{v}`"))}\n";
+                        }
+                        else if (type.Members != null && type.Members.Count > 0)
+                        {
+                            // Check if this is a TypeScript/Angular file (has signals, readonly, etc.)
+                            var isTypeScript = type.Members.Any(m => 
+                                m.MemberType == "signal" || 
+                                m.MemberType == "readonly" || 
+                                m.MemberType == "computed");
+
+                            if (isTypeScript)
                             {
-                                // Use full signature if available, otherwise format return type
-                                if (!string.IsNullOrEmpty(member.Signature))
+                                // Group TypeScript members by type for better organization
+                                var readonlyMembers = type.Members.Where(m => m.MemberType == "readonly").ToList();
+                                var signalMembers = type.Members.Where(m => m.MemberType == "signal").ToList();
+                                var computedMembers = type.Members.Where(m => m.MemberType == "computed").ToList();
+                                var propertyMembers = type.Members.Where(m => m.MemberType == "property").ToList();
+                                var constructorMembers = type.Members.Where(m => m.MemberType == "constructor").ToList();
+                                var methodMembers = type.Members.Where(m => m.MemberType == "method").ToList();
+
+                                if (readonlyMembers.Count > 0)
                                 {
-                                    md += $"    - `{member.Signature}`\n";
+                                    md += "  - **Readonly Fields:**\n";
+                                    foreach (var member in readonlyMembers.OrderBy(m => m.Name))
+                                    {
+                                        md += $"    - `{member.Signature}`\n";
+                                    }
                                 }
-                                else
+
+                                if (signalMembers.Count > 0)
                                 {
-                                    var returnType = !string.IsNullOrEmpty(member.ReturnType) ? $" : {member.ReturnType}" : "";
-                                    md += $"    - `{member.MemberType}` {member.Name}{returnType}\n";
+                                    md += "  - **Signals:**\n";
+                                    foreach (var member in signalMembers.OrderBy(m => m.Name))
+                                    {
+                                        md += $"    - `{member.Name}: {member.ReturnType}`\n";
+                                    }
+                                }
+
+                                if (computedMembers.Count > 0)
+                                {
+                                    md += "  - **Computed:**\n";
+                                    foreach (var member in computedMembers.OrderBy(m => m.Name))
+                                    {
+                                        md += $"    - `{member.Name} = computed<{member.ReturnType}>()`\n";
+                                    }
+                                }
+
+                                if (propertyMembers.Count > 0)
+                                {
+                                    md += "  - **Properties:**\n";
+                                    foreach (var member in propertyMembers.OrderBy(m => m.Name))
+                                    {
+                                        md += $"    - `{member.Name}: {member.ReturnType}`\n";
+                                    }
+                                }
+
+                                if (constructorMembers.Count > 0)
+                                {
+                                    md += "  - **Constructor:**\n";
+                                    foreach (var member in constructorMembers)
+                                    {
+                                        md += $"    - `{member.Signature}`\n";
+                                    }
+                                }
+
+                                if (methodMembers.Count > 0)
+                                {
+                                    md += "  - **Methods:**\n";
+                                    foreach (var member in methodMembers.OrderBy(m => m.Name))
+                                    {
+                                        md += $"    - `{member.Signature}`\n";
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                // Standard C# member listing
+                                md += "  - Members:\n";
+                                foreach (var member in type.Members.OrderBy(m => m.Name))
+                                {
+                                    // Use full signature if available, otherwise format return type
+                                    if (!string.IsNullOrEmpty(member.Signature))
+                                    {
+                                        md += $"    - `{member.Signature}`\n";
+                                    }
+                                    else
+                                    {
+                                        var returnType = !string.IsNullOrEmpty(member.ReturnType) ? $" : {member.ReturnType}" : "";
+                                        md += $"    - `{member.MemberType}` {member.Name}{returnType}\n";
+                                    }
                                 }
                             }
                         }
@@ -267,8 +413,10 @@ namespace ProjectOverviewGenerator.Services
             {
                 // Handle patterns like "*/bin", ".git", "node_modules"
                 var patternToMatch = pattern.TrimStart('*', '/');
-                return dirName.Equals(patternToMatch, StringComparison.OrdinalIgnoreCase) ||
-                       dirName.Contains(patternToMatch, StringComparison.OrdinalIgnoreCase);
+                
+                // Exact match only - don't use Contains to avoid false positives
+                // e.g., ".angular" should not match "UI.Angular"
+                return dirName.Equals(patternToMatch, StringComparison.OrdinalIgnoreCase);
             });
         }
 

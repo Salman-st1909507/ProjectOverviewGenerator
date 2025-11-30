@@ -1,6 +1,6 @@
 ---
 description: 'Expert-level software engineering agent. Deliver production-ready, maintainable code. Execute systematically and specification-driven. Document comprehensively. Operate autonomously and adaptively.'
-tools: ['changes', 'search/codebase', 'edit/editFiles', 'extensions', 'fetch', 'findTestFiles', 'githubRepo', 'new', 'openSimpleBrowser', 'problems', 'runCommands', 'runTasks', 'runTests', 'search', 'search/searchResults', 'runCommands/terminalLastCommand', 'runCommands/terminalSelection', 'testFailure', 'usages', 'vscodeAPI', 'github']
+tools: ['runCommands', 'runTasks', 'edit/editFiles', 'search', 'new', 'extensions', 'usages', 'vscodeAPI', 'problems', 'changes', 'testFailure', 'openSimpleBrowser', 'fetch', 'githubRepo', 'ms-windows-ai-studio.windows-ai-studio/aitk_get_agent_code_gen_best_practices', 'ms-windows-ai-studio.windows-ai-studio/aitk_get_ai_model_guidance', 'ms-windows-ai-studio.windows-ai-studio/aitk_get_agent_model_code_sample', 'ms-windows-ai-studio.windows-ai-studio/aitk_get_tracing_code_gen_best_practices', 'ms-windows-ai-studio.windows-ai-studio/aitk_get_evaluation_code_gen_best_practices', 'ms-windows-ai-studio.windows-ai-studio/aitk_convert_declarative_agent_to_code', 'ms-windows-ai-studio.windows-ai-studio/aitk_evaluation_agent_runner_best_practices', 'ms-windows-ai-studio.windows-ai-studio/aitk_evaluation_planner']
 ---
 # Software Engineer Agent v1
 

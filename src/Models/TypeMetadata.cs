@@ -14,5 +14,6 @@ namespace ProjectOverviewGenerator.Models
         public List<string> ImplementedInterfaces { get; set; } = new List<string>();
         public List<AttributeMetadata> Attributes { get; set; } = new List<AttributeMetadata>();
         public List<MemberMetadata> Members { get; set; } = new List<MemberMetadata>();
+        public List<string> EnumValues { get; set; } = new List<string>(); // For enums: "Value1 = 0", "Value2 = 1"
     }
 }

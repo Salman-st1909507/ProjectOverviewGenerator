@@ -4,8 +4,6 @@ VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProjectOverviewGenerator", "ProjectOverviewGenerator.csproj", "{1CE77831-6BB3-AA44-6246-EE2C2499DF22}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AiWorkspaceInspector", "AiWorkspaceInspector\AiWorkspaceInspector.csproj", "{C7DCE26A-1E22-7B7F-0B07-6DC498C71955}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU

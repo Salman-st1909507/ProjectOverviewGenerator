@@ -24,6 +24,33 @@ namespace ProjectOverviewGenerator.Services.Parsers
                 var name = match.Groups[3].Value;
                 var baseTypes = match.Groups[5].Success ? match.Groups[5].Value.Split(',').Select(s => s.Trim()).ToList() : new System.Collections.Generic.List<string>();
 
+                // Extract controller-level Route attribute (before class declaration)
+                string controllerRoute = "";
+                var preClassContent = fileContent.Substring(0, match.Index);
+                var preClassLines = preClassContent.Split(new[] { "\r\n", "\r", "\n" }, System.StringSplitOptions.None);
+                
+                // Look backward from class declaration for Route attribute
+                for (int i = preClassLines.Length - 1; i >= 0 && i >= preClassLines.Length - 10; i--)
+                {
+                    var attrLine = preClassLines[i].Trim();
+                    var controllerRouteMatch = System.Text.RegularExpressions.Regex.Match(
+                        attrLine,
+                        @"\[Route\(\s*""([^""]*)""\s*\)\]",
+                        System.Text.RegularExpressions.RegexOptions.IgnoreCase
+                    );
+                    if (controllerRouteMatch.Success)
+                    {
+                        controllerRoute = controllerRouteMatch.Groups[1].Value;
+                        break;
+                    }
+                }
+                
+                // If no explicit route, derive from controller name (e.g., AccountController -> Account)
+                if (string.IsNullOrEmpty(controllerRoute) && name.EndsWith("Controller"))
+                {
+                    controllerRoute = name.Substring(0, name.Length - "Controller".Length);
+                }
+
                 // Find body of the type
                 int startIdx = match.Index + match.Length;
                 int braceIdx = fileContent.IndexOf('{', startIdx);
@@ -39,22 +66,98 @@ namespace ProjectOverviewGenerator.Services.Parsers
 
                 // Members: methods, properties, fields
                 var members = new System.Collections.Generic.List<MemberMetadata>();
+                var enumValues = new System.Collections.Generic.List<string>();
 
                 // Extract members with full signatures
                 var lines = body.Split(new[] { "\r\n", "\r", "\n" }, System.StringSplitOptions.None);
-                for (int i = 0; i < lines.Length; i++)
+                
+                // Special handling for interfaces - they have no access modifiers
+                bool isInterface = kind == "interface";
+                bool isEnum = kind == "enum";
+                
+                // For enums, extract values instead of members
+                if (isEnum)
                 {
-                    var line = lines[i].Trim();
-                    if (string.IsNullOrWhiteSpace(line) || line.StartsWith("//") || line.StartsWith("/*"))
+                    foreach (var line in lines)
+                    {
+                        var trimmed = line.Trim();
+                        if (string.IsNullOrWhiteSpace(trimmed) || trimmed.StartsWith("//") || trimmed.StartsWith("/*"))
+                            continue;
+                        
+                        // Enum values: Name or Name = Value
+                        var enumValueMatch = System.Text.RegularExpressions.Regex.Match(trimmed, @"^(\w+)\s*(=\s*\d+)?\s*,?");
+                        if (enumValueMatch.Success)
+                        {
+                            var valueName = enumValueMatch.Groups[1].Value;
+                            var valueAssignment = enumValueMatch.Groups[2].Success ? enumValueMatch.Groups[2].Value.Trim() : "";
+                            
+                            if (!string.IsNullOrEmpty(valueName))
+                            {
+                                if (!string.IsNullOrEmpty(valueAssignment))
+                                {
+                                    enumValues.Add($"{valueName} {valueAssignment}");
+                                }
+                                else
+                                {
+                                    enumValues.Add(valueName);
+                                }
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    // For non-enums, extract members as before
+                    for (int i = 0; i < lines.Length; i++)
+                    {
+                        var line = lines[i].Trim();
+                        if (string.IsNullOrWhiteSpace(line) || line.StartsWith("//") || line.StartsWith("/*"))
+                            continue;
+
+                    // For interfaces, look for property/method signatures without access modifiers
+                    // For classes/records, require access modifiers
+                    bool hasMemberSignature = false;
+                    if (isInterface)
+                    {
+                        // Interface members: properties with { get; }, methods with (), or property/method declarations
+                        hasMemberSignature = line.Contains("(") || line.Contains("{ get") || line.Contains("{get") || 
+                                           (line.Contains(" ") && (line.Contains(";") || line.EndsWith("}")));
+                    }
+                    else
+                    {
+                        // Skip non-member lines for classes
+                        hasMemberSignature = line.StartsWith("public") || line.StartsWith("private") || 
+                                           line.StartsWith("protected") || line.StartsWith("internal");
+                    }
+                    
+                    if (!hasMemberSignature)
                         continue;
 
-                    // Skip non-member lines
-                    if (!line.StartsWith("public") && !line.StartsWith("private") && !line.StartsWith("protected") && !line.StartsWith("internal"))
-                        continue;
+                    // Collect attributes from preceding lines
+                    var attributeLines = new System.Collections.Generic.List<string>();
+                    int attrIdx = i - 1;
+                    while (attrIdx >= 0)
+                    {
+                        var attrLine = lines[attrIdx].Trim();
+                        if (string.IsNullOrWhiteSpace(attrLine) || attrLine.StartsWith("//") || attrLine.StartsWith("/*") || attrLine.StartsWith("///"))
+                        {
+                            attrIdx--;
+                            continue;
+                        }
+                        if (attrLine.StartsWith("[") && attrLine.EndsWith("]"))
+                        {
+                            attributeLines.Insert(0, attrLine);
+                            attrIdx--;
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
 
                     var fullSignature = line;
 
-                    // For methods, continue to next line if it ends with (
+                    // For methods, continue to next line if it ends with ( or doesn't have closing )
                     if (line.Contains("(") && !line.Contains(")"))
                     {
                         int j = i + 1;
@@ -70,6 +173,11 @@ namespace ProjectOverviewGenerator.Services.Parsers
                             if (endParenIdx != -1)
                             {
                                 fullSignature += " " + closeLine.Substring(0, endParenIdx + 1);
+                                // For interfaces, also include the semicolon if present
+                                if (isInterface && closeLine.Length > endParenIdx + 1)
+                                {
+                                    fullSignature += closeLine.Substring(endParenIdx + 1).TrimEnd();
+                                }
                             }
                         }
                     }
@@ -84,8 +192,8 @@ namespace ProjectOverviewGenerator.Services.Parsers
 
                     var memberName = nameMatch.Groups[1].Value;
 
-                    // Skip if it's a class name or constructor pattern
-                    if (memberName == name || memberName[0] == '_')
+                    // Skip if it's a class name or constructor pattern (but not for interfaces)
+                    if (!isInterface && (memberName == name || memberName[0] == '_'))
                     {
                         // Skip internal members starting with _
                         if (memberName[0] == '_' && !memberName.StartsWith("_Ready") && !memberName.StartsWith("_Process") && !memberName.StartsWith("_Input"))
@@ -93,7 +201,7 @@ namespace ProjectOverviewGenerator.Services.Parsers
                     }
 
                     // Extract return type
-                    var typeMatch = System.Text.RegularExpressions.Regex.Match(fullSignature, @"\s([\w<>\[\]]+)\s+\w+\s*(\(|\{|;|=)");
+                    var typeMatch = System.Text.RegularExpressions.Regex.Match(fullSignature, @"\s([\w<>\[\]?]+)\s+\w+\s*(\(|\{|;|=)");
                     var returnType = typeMatch.Success ? typeMatch.Groups[1].Value : "unknown";
 
                     members.Add(new MemberMetadata
@@ -109,27 +217,138 @@ namespace ProjectOverviewGenerator.Services.Parsers
                     // API endpoint extraction for methods
                     if (isMethod)
                     {
-                        var httpAttrMatch = System.Text.RegularExpressions.Regex.Match(
-                            fullSignature,
-                            @"\[(Http(Get|Post|Put|Delete|Patch|Options|Head))\(\s*""([^""]*)""\s*\)\]"
-                        );
-                        if (!httpAttrMatch.Success)
+                        string? httpMethod = null;
+                        string route = "";
+                        var dtos = new System.Collections.Generic.List<string>();
+                        
+                        // Check attributes for HTTP method decorators and routes
+                        foreach (var attr in attributeLines)
                         {
-                            httpAttrMatch = System.Text.RegularExpressions.Regex.Match(fullSignature, @"\[(Http(Get|Post|Put|Delete|Patch|Options|Head))\(\s*'([^']*)'\s*\)\]");
+                            // Match [HttpGet], [HttpPost("route")], [HttpGet("{id}")], etc.
+                            var httpAttrMatch = System.Text.RegularExpressions.Regex.Match(
+                                attr,
+                                @"\[Http(Get|Post|Put|Delete|Patch|Options|Head)(?:\(\s*""([^""]*)""\s*\))?\]",
+                                System.Text.RegularExpressions.RegexOptions.IgnoreCase
+                            );
+                            
+                            if (httpAttrMatch.Success)
+                            {
+                                httpMethod = httpAttrMatch.Groups[1].Value.ToUpper();
+                                // If route is specified in HttpMethod attribute, use it
+                                if (httpAttrMatch.Groups[2].Success && !string.IsNullOrEmpty(httpAttrMatch.Groups[2].Value))
+                                {
+                                    route = httpAttrMatch.Groups[2].Value;
+                                }
+                            }
+                            
+                            // Also check for separate [Route("...")] attribute
+                            var routeAttrMatch = System.Text.RegularExpressions.Regex.Match(
+                                attr,
+                                @"\[Route\(\s*""([^""]*)""\s*\)\]",
+                                System.Text.RegularExpressions.RegexOptions.IgnoreCase
+                            );
+                            
+                            if (routeAttrMatch.Success)
+                            {
+                                route = routeAttrMatch.Groups[1].Value;
+                            }
                         }
-                        if (httpAttrMatch.Success)
+                        
+                        // Extract DTOs from method parameters
+                        // Pattern 1: [FromForm] TokenCommand command, [FromBody] UpdateDto dto, etc.
+                        var paramPattern = @"\[From(?:Form|Body|Query|Route|Header)\]\s+([\w<>]+)\s+\w+";
+                        var paramMatches = System.Text.RegularExpressions.Regex.Matches(fullSignature, paramPattern);
+                        foreach (System.Text.RegularExpressions.Match paramMatch in paramMatches)
                         {
+                            var dtoType = paramMatch.Groups[1].Value;
+                            if (!dtos.Contains(dtoType))
+                            {
+                                dtos.Add(dtoType);
+                            }
+                        }
+                        
+                        // Pattern 2: Parameters without [From*] attributes - extract complex types (not primitives)
+                        // Match: (Type param, Type2 param2) but skip primitives like Guid, int, string
+                        if (dtos.Count == 0) // Only if we didn't find any [From*] parameters
+                        {
+                            var allParamsPattern = @"\(([^)]*)\)";
+                            var allParamsMatch = System.Text.RegularExpressions.Regex.Match(fullSignature, allParamsPattern);
+                            if (allParamsMatch.Success)
+                            {
+                                var paramsString = allParamsMatch.Groups[1].Value;
+                                // Split by comma, extract type names
+                                var parameters = paramsString.Split(',');
+                                foreach (var param in parameters)
+                                {
+                                    var trimmed = param.Trim();
+                                    if (string.IsNullOrEmpty(trimmed)) continue;
+                                    
+                                    // Extract type (first word before space)
+                                    var paramTypeMatch = System.Text.RegularExpressions.Regex.Match(trimmed, @"^([\w<>]+)\s+\w+");
+                                    if (paramTypeMatch.Success)
+                                    {
+                                        var paramType = paramTypeMatch.Groups[1].Value;
+                                        // Skip primitive types and CancellationToken
+                                        var primitives = new[] { "int", "string", "bool", "Guid", "DateTime", "long", "double", "float", "decimal", "CancellationToken" };
+                                        if (!primitives.Contains(paramType) && !dtos.Contains(paramType))
+                                        {
+                                            dtos.Add(paramType);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Also try to extract return type from Task<IActionResult> or similar
+                        // This is a simplified approach - in real scenarios, you'd need to trace the actual return
+                        var returnTypeMatch = System.Text.RegularExpressions.Regex.Match(fullSignature, @"Task<(\w+)>");
+                        if (returnTypeMatch.Success)
+                        {
+                            var taskReturn = returnTypeMatch.Groups[1].Value;
+                            // Only add if it's not IActionResult (which is generic)
+                            if (taskReturn != "IActionResult" && taskReturn != "ActionResult")
+                            {
+                                if (!dtos.Contains(taskReturn))
+                                {
+                                    dtos.Add(taskReturn);
+                                }
+                            }
+                        }
+                        
+                        // If we found an HTTP method, create an endpoint
+                        if (httpMethod != null)
+                        {
+                            // Combine controller route with method route
+                            string fullRoute = controllerRoute;
+                            if (!string.IsNullOrEmpty(route))
+                            {
+                                // Add slash if needed
+                                if (!string.IsNullOrEmpty(fullRoute) && !fullRoute.EndsWith("/") && !route.StartsWith("/"))
+                                {
+                                    fullRoute += "/";
+                                }
+                                fullRoute += route;
+                            }
+                            else if (!string.IsNullOrEmpty(fullRoute))
+                            {
+                                // Method has no route, just use controller route with trailing slash
+                                fullRoute += "/";
+                            }
+                            
                             apiEndpoints.Add(new ApiEndpointMetadata
                             {
-                                Route = httpAttrMatch.Groups[3].Value,
-                                HttpMethod = httpAttrMatch.Groups[2].Value.ToUpper(),
+                                Route = fullRoute,
+                                HttpMethod = httpMethod,
                                 Controller = name,
                                 Handler = memberName,
-                                Dtos = new System.Collections.Generic.List<string>()
+                                Dtos = dtos,
+                                MethodSignature = fullSignature,
+                                Attributes = new System.Collections.Generic.List<string>(attributeLines)
                             });
                         }
                     }
-                }
+                    } // End of for loop for members
+                } // End of else block for non-enum types
 
                 types.Add(new TypeMetadata
                 {
@@ -139,7 +358,8 @@ namespace ProjectOverviewGenerator.Services.Parsers
                     BaseTypes = baseTypes,
                     ImplementedInterfaces = new System.Collections.Generic.List<string>(),
                     Attributes = new System.Collections.Generic.List<AttributeMetadata>(),
-                    Members = members
+                    Members = members,
+                    EnumValues = enumValues
                 });
             }
 

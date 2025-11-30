@@ -12,5 +12,7 @@ namespace ProjectOverviewGenerator.Models
         public string Controller { get; set; } = string.Empty;
         public string Handler { get; set; } = string.Empty;
         public List<string> Dtos { get; set; } = new List<string>();
+        public string MethodSignature { get; set; } = string.Empty;
+        public List<string> Attributes { get; set; } = new List<string>();
     }
 }
